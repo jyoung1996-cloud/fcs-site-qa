@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FCS Site QA – Import</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--ground:#f3f2f1;--sheet:#fff;--ink:#141414;--ink-2:#585b5f;--line:#cfcdcb;--label:#e4e3e2;--red:#d10f0f;--pass:#1d7a3e}
+@media (prefers-color-scheme:dark){:root{--ground:#111;--sheet:#1b1b1b;--ink:#ededec;--ink-2:#a7a9ac;--line:#3a3a3a;--label:#2a2a2a;--red:#ff5245;--pass:#5cc37f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.45 Arial,Helvetica,sans-serif}
+header{background:#141414;color:#fff;padding:12px 16px;border-bottom:4px solid var(--red);display:flex;align-items:center;gap:14px}
+header .logo{background:#fff;padding:4px 7px;line-height:0}header img{height:28px}
+header b{display:block;font-size:17px}header span{font-size:12.5px;color:#bdbdbd}
+main{max-width:760px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0;font-size:24px;text-transform:uppercase}
+.box{background:var(--sheet);border:1.5px solid var(--ink);padding:14px 16px}
+.box h2{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-2)}
+ol{margin:6px 0 0;padding-left:20px}
+.pick{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border:1px solid var(--ink);background:var(--ink);color:var(--sheet);font-weight:700;cursor:pointer}
+.pick:focus-within{outline:2px solid var(--red);outline-offset:2px}
+.pick input{position:absolute;opacity:0;width:1px;height:1px}
+.bar{height:10px;background:var(--label);margin:10px 0 6px}.bar i{display:block;height:100%;width:0;background:var(--pass);transition:width .2s}
+.st{font-size:14px;color:var(--ink-2)}
+#log{font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace;max-height:240px;overflow:auto;background:var(--ground);border:1px solid var(--line);padding:8px;margin-top:8px;white-space:pre-wrap}
+.err{color:var(--red);font-weight:700}
+a{color:inherit}
+</style>
+</head>
+<body>
+<header><span class="logo"><img src="/logo.png" alt="FCS"></span><span><b>FCS Site QA</b><span>Import from the claude.ai app</span></span></header>
+<main>
+<h1>Import records and files</h1>
+<div class="box"><h2>How it works</h2>
+<ol>
+<li>Press <b>Choose files</b> and select every file named <b>FCS-cloud-…</b> (the data file and all the zip parts). You can select them all at once.</li>
+<li>Keep this page open until it says <b>Finished</b>. If it stops, open it again and choose the same files: anything already in the cloud is skipped.</li>
+</ol></div>
+<div class="box"><h2>In the cloud now</h2><div id="now" class="st">Checking…</div></div>
+<div class="box">
+<label class="pick">Choose files<input id="f" type="file" multiple accept=".zip,.json,application/zip,application/json"></label>
+<div class="bar" aria-hidden="true"><i id="bar"></i></div>
+<div id="st" class="st" role="status" aria-live="polite">Nothing imported yet.</div>
+<div id="log"></div>
+</div>
+<p><a href="/">Back to the app</a></p>
+</main>
+<script>
+(function(){
+const $=s=>document.querySelector(s);const log=t=>{const l=$("#log");l.textContent+=t+"\n";l.scrollTop=l.scrollHeight};
+const mb=b=>(b/1048576).toFixed(0)+" MB";
+async function j(u,o){const r=await fetch(u,Object.assign({credentials:"same-origin"},o||{}));if(r.status===401){location.href="/login";throw new Error("login")}let d={};try{d=await r.json()}catch(e){}if(!r.ok){const e=new Error(d.message||d.error||("HTTP "+r.status));e.code=d.error;throw e}return d}
+let have=new Set();
+async function refresh(){const h=await j("/api/import/have");have=new Set(h.files);
+  const d=(h.docs||[]).map(x=>x.n+" "+x.col).join(", ")||"no records";
+  $("#now").textContent=d+" · "+h.usage.files+" files, "+mb(h.usage.bytes)+" of "+mb(h.quota)+" used";}
+refresh().catch(e=>$("#now").textContent="Couldn't check: "+e.message);
+$("#f").addEventListener("change",async e=>{
+  const files=[...e.target.files];if(!files.length)return;
+  const data=files.filter(f=>/\.json$/i.test(f.name)),zips=files.filter(f=>/\.zip$/i.test(f.name));
+  let done=0,skip=0,fail=0,total=0;const set=(t)=>$("#st").textContent=t;
+  try{
+    for(const f of data){set("Importing records from "+f.name+"…");const all=JSON.parse(await f.text());const L=Array.isArray(all)?all:all.docs;
+      for(let i=0;i<L.length;i+=200){const r=await j("/api/import/docs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(L.slice(i,i+200))});done+=r.imported}
+      log("Records: "+L.length+" from "+f.name)}
+    const entries=[];
+    for(const f of zips){set("Opening "+f.name+"…");const z=await JSZip.loadAsync(f);z.forEach((p,ent)=>{const m=p.split("/").pop().match(/^([0-9a-f]{32})(\.[a-z0-9]+)?$/i);if(m&&!ent.dir)entries.push({aid:m[1].toLowerCase(),name:p.split("/").pop(),ent})})}
+    total=entries.length;let n=0;
+    for(const x of entries){n++;$("#bar").style.width=(100*n/Math.max(1,total))+"%";
+      if(have.has(x.aid)){skip++;continue}
+      set("Uploading file "+n+" of "+total+"…");
+      try{const b=await x.ent.async("blob");await j("/api/import/file/"+x.aid+"?name="+encodeURIComponent(x.name),{method:"PUT",body:b});have.add(x.aid);done++}
+      catch(er){if(er.code==="storage_full"){log("Cloud storage is full – stopped at file "+n+".");set("Stopped: cloud storage is full.");$("#st").className="st err";await refresh();return}
+        fail++;log("Failed: "+x.name+" ("+er.message+")")}}
+    set("Finished. "+(total?total+" files: "+(total-skip-fail)+" uploaded, "+skip+" already there"+(fail?", "+fail+" failed – choose the same files again to retry":"")+".":"Records imported."));
+  }catch(er){set("Stopped: "+er.message);$("#st").className="st err"}
+  await refresh();
+});
+})();
+</script>
+</body>
+</html>
