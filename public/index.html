@@ -736,7 +736,7 @@ function refCount(aid,skipCol,skipId){let n=0;["itrs","packs"].forEach(c=>S[c].f
 async function dropAsset(aid,col,id,st){if(!assets||!aid||st)return;if(refCount(aid,col,id))return;try{await assets.delete(aid)}catch(e){}}
 
 /* ---------- nav ---------- */
-const NAV=[["dash","Dashboard"],["attn","Needs attention"],["itrs","ITRs"],["pressure","Pressure testing"],["packs","Job packs"],["drawings","Drawing register"],["mivs","MIV register"],["ncrs","NCRs"],["defects","Defects"],["library","Procedures & registers"],["settings","Project setup"]];
+const NAV=[["dash","Dashboard"],["itrs","ITRs"],["pressure","Pressure testing"],["packs","Job packs"],["drawings","Drawing register"],["mivs","MIV register"],["ncrs","NCRs"],["defects","Defects"],["library","Procedures & registers"],["attn","Needs attention"],["settings","Project setup"]];
 function navCount(k){if(k==="pressure")return tpItems().length||"";if(k==="attn")return S.loaded?attnItems(S.itrs.map(r=>({r,x:itrState(r)}))).length:"";if(k==="library")return (sett().library||[]).length;if(k==="itrs")return S.itrs.length;if(k==="welds")return S.itrs.filter(r=>r.tpl==="M1.T092").length;if(k==="mivs")return S.mivs.length;if(k==="packs")return S.packs.length;if(k==="drawings")return S.packs.reduce((t,p)=>t+(p.docs||[]).length,0);
   if(k==="ncrs")return S.ncrs.filter(r=>r.status!=="Closed").length;if(k==="defects")return S.defects.filter(r=>r.status!=="Closed").length;return ""}
 function renderNav(){const cur=S.view==="pack"?"packs":PT_VIEWS.includes(S.view)?"pressure":S.view;
