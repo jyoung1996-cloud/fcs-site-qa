@@ -112,7 +112,7 @@ h2.sec::after{content:"";flex:1;height:1px;background:var(--line)}
 .tb .v{padding:7px 10px 9px;font-weight:600;overflow-wrap:anywhere}
 
 /* Tiles */
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:18px 0 26px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:18px 0 26px}
 .tile{background:var(--sheet);border:1px solid var(--line);padding:14px 16px;text-align:left;display:flex;flex-direction:column;gap:2px;border-top:4px solid var(--ink)}
 .tile:hover{border-color:var(--ink)}
 .tile.alert{border-top-color:var(--red)}
@@ -779,7 +779,8 @@ function viewDash(){
     tile("itrs",fcs.length,"ITRs","Awaiting client signature",false,"FCS complete")+
     tile("itrs",prog.length,"ITRs","Started, not yet signed off",false,"In progress")+
     tile("ncrs",openN.length,"Open NCRs",openN.filter(overdue).length+" overdue",openN.some(overdue))+
-    tile("mivs",mivM.length,"Deliveries this month",pend.length+" pending inspection",pend.length>0)+'</div>';
+    tile("mivs",mivM.length,"Deliveries this month",pend.length+" pending inspection",pend.length>0)+
+    tile("pressure",tpItems().length,"Pressure test packs",ptMarkDocs(PT_PID_CATS).length+" marked-up P&IDs · "+S.itrs.filter(r=>r.tpl==="M1.T092").length+" EF welds")+'</div>';
   if(!S.loaded)return h+emptyState("Loading records…","Your registers appear here as soon as they load.");
   h+='<div class="cols"><div>';
   h+='<h2 class="sec">ITR progress by area</h2>'+areaBars(itr);
