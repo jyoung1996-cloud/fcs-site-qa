@@ -13,12 +13,15 @@ const PORT = process.env.PORT || 8080;
 const PASSWORD = process.env.SITE_PASSWORD || "";
 const ADMIN = process.env.ADMIN_TOKEN || "";
 const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
-const BUCKET = process.env.S3_BUCKET;
-const QUOTA = Number(process.env.STORAGE_QUOTA_BYTES || 900 * 1024 * 1024);
-const s3 = new S3Client({
-  endpoint: process.env.S3_ENDPOINT, region: process.env.S3_REGION || "auto", forcePathStyle: true,
-  credentials: { accessKeyId: process.env.S3_KEY || "", secretAccessKey: process.env.S3_SECRET || "" },
+// Storage defaults come from the environment; a "storage" row in the config table (set by the admin) overrides them,
+// so the bucket can be moved without redeploying every secret.
+let BUCKET = process.env.S3_BUCKET;
+let QUOTA = Number(process.env.STORAGE_QUOTA_BYTES || 900 * 1024 * 1024);
+const mkS3 = (key, secret, endpoint, region) => new S3Client({
+  endpoint: endpoint || process.env.S3_ENDPOINT, region: region || process.env.S3_REGION || "auto", forcePathStyle: true,
+  credentials: { accessKeyId: key || "", secretAccessKey: secret || "" },
 });
+let s3 = mkS3(process.env.S3_KEY, process.env.S3_SECRET);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: /sslmode=disable/.test(process.env.DATABASE_URL || "") ? false : { rejectUnauthorized: false }, max: 5 });
 
 const APP_HTML = fs.readFileSync(path.join(__dirname, "public", "index.html"));
@@ -31,8 +34,17 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS docs (col text NOT NULL, id text NOT NULL, data jsonb, deleted boolean NOT NULL DEFAULT false,
       seq bigint NOT NULL DEFAULT nextval('doc_seq'), updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (col, id));
     CREATE INDEX IF NOT EXISTS docs_seq ON docs (seq);
-    CREATE TABLE IF NOT EXISTS files (aid text PRIMARY KEY, size bigint NOT NULL, type text, created_at timestamptz NOT NULL DEFAULT now());`);
+    CREATE TABLE IF NOT EXISTS files (aid text PRIMARY KEY, size bigint NOT NULL, type text, created_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE IF NOT EXISTS config (key text PRIMARY KEY, value jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());`);
+  const r = await pool.query("SELECT value FROM config WHERE key='storage'");
+  const c = r.rows[0] && r.rows[0].value;
+  if (c && c.bucket && c.key && c.secret) {
+    BUCKET = c.bucket; s3 = mkS3(c.key, c.secret, c.endpoint, c.region);
+    if (c.quota) QUOTA = Number(c.quota);
+    console.log("storage from config:", c.name || c.bucket);
+  }
 }
+const ready = migrate().catch(e => console.error("migrate failed", e));
 
 // ---- auth ----
 const sign = v => crypto.createHmac("sha256", SECRET).update(v).digest("hex");
@@ -102,6 +114,7 @@ async function unpack(key) {
 
 // ---- routes ----
 async function handle(req, res) {
+  await ready;
   const u = new URL(req.url, "http://x"); const p = u.pathname;
 
   if (p === "/healthz") return send(res, 200, { ok: true });
@@ -130,7 +143,7 @@ async function handle(req, res) {
     }
     if (p === "/admin/stats") {
       const r = await pool.query("SELECT col, count(*)::int AS n FROM docs WHERE NOT deleted GROUP BY col ORDER BY col");
-      return send(res, 200, { docs: r.rows, files: await usedBytes() });
+      return send(res, 200, { docs: r.rows, files: await usedBytes(), storage: { bucket: String(BUCKET || "").replace(/^amp-acc-[0-9a-f]+-/, ""), quota: QUOTA } });
     }
     if (p === "/admin/files") { const r = await pool.query("SELECT aid,size FROM files ORDER BY aid"); return send(res, 200, r.rows); }
     let bm = p.match(/^\/admin\/blob\/([0-9a-f]{32})$/);
@@ -272,5 +285,5 @@ async function handle(req, res) {
 http.createServer((req, res) => {
   handle(req, res).catch(e => { console.error(req.method, req.url, e); if (!res.headersSent) send(res, e.code === 413 ? 413 : 500, { error: e.code === 413 ? "too large" : "server error" }); else res.end(); });
 }).listen(PORT, async () => {
-  try { await migrate(); console.log("FCS Site QA cloud listening on", PORT); } catch (e) { console.error("migrate failed", e); }
+  await ready; console.log("FCS Site QA cloud listening on", PORT);
 });
