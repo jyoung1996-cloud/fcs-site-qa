@@ -133,6 +133,14 @@ async function handle(req, res) {
       return send(res, 200, { docs: r.rows, files: await usedBytes() });
     }
     if (p === "/admin/files") { const r = await pool.query("SELECT aid,size FROM files ORDER BY aid"); return send(res, 200, r.rows); }
+    let bm = p.match(/^\/admin\/blob\/([0-9a-f]{32})$/);
+    if (bm) {
+      const r = await pool.query("SELECT size,type FROM files WHERE aid=$1", [bm[1]]);
+      if (!r.rows.length) return send(res, 404, { error: "not in cloud" });
+      const obj = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: "files/" + bm[1] }));
+      res.writeHead(200, { "Content-Type": r.rows[0].type || "application/octet-stream", "Content-Length": r.rows[0].size });
+      obj.Body.pipe(res); return;
+    }
     // read/write records for scheduled syncs (admin token only)
     let am = p.match(/^\/admin\/docs\/([a-z]+)$/);
     if (am && req.method === "GET") {
