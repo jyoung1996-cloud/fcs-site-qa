@@ -658,7 +658,7 @@ async function pvDownload(){if(!PV.blob)return;if(!downloads){toast("Downloads a
   try{await downloads.save({filename:fn,data:PV.blob})}catch(e){if(!(e&&e.code==="declined"))toast("Couldn't save the file.",true)}}
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-pv]");if(b){const k=b.dataset.pv;if(k==="close")closePdf();else if(k==="dl")pvDownload();else if(k==="in"&&PV.zoom<4){PV.zoom=Math.min(4,PV.zoom*1.5);pvRender()}else if(k==="out"&&PV.zoom>0.5){PV.zoom=Math.max(0.5,PV.zoom/1.5);pvRender()}return}
-  const a=e.target.closest('a[href^="/_blob/"]');if(!a)return;
+  const a=e.target.closest('a[href^="/_blob/"]');if(!a||a.hasAttribute("download"))return;
   const m=a.getAttribute("href").match(/^\/_blob\/([0-9a-f]{32})/);if(!m)return;e.preventDefault();e.stopPropagation();openPdf(m[1],(a.textContent||"").trim())},true);
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#pdfv").hidden){closePdf();e.stopPropagation()}},true);
 window.addEventListener("resize",()=>{if(!$("#pdfv").hidden){clearTimeout(PV._t);PV._t=setTimeout(pvRender,250)}});
@@ -717,8 +717,8 @@ function refCount(aid,skipCol,skipId){let n=0;["itrs","packs"].forEach(c=>S[c].f
 async function dropAsset(aid,col,id,st){if(!assets||!aid||st)return;if(refCount(aid,col,id))return;try{await assets.delete(aid)}catch(e){}}
 
 /* ---------- nav ---------- */
-const NAV=[["dash","Dashboard"],["itrs","ITRs"],["welds","EF weld log"],["packs","Job packs"],["drawings","Drawing register"],["mivs","MIV register"],["ncrs","NCRs"],["defects","Defects"],["settings","Project setup"]];
-function navCount(k){if(k==="itrs")return S.itrs.length;if(k==="welds")return S.itrs.filter(r=>r.tpl==="M1.T092").length;if(k==="mivs")return S.mivs.length;if(k==="packs")return S.packs.length;if(k==="drawings")return S.packs.reduce((t,p)=>t+(p.docs||[]).length,0);
+const NAV=[["dash","Dashboard"],["itrs","ITRs"],["welds","EF weld log"],["packs","Job packs"],["drawings","Drawing register"],["mivs","MIV register"],["ncrs","NCRs"],["defects","Defects"],["library","Procedures & registers"],["settings","Project setup"]];
+function navCount(k){if(k==="library")return (sett().library||[]).length;if(k==="itrs")return S.itrs.length;if(k==="welds")return S.itrs.filter(r=>r.tpl==="M1.T092").length;if(k==="mivs")return S.mivs.length;if(k==="packs")return S.packs.length;if(k==="drawings")return S.packs.reduce((t,p)=>t+(p.docs||[]).length,0);
   if(k==="ncrs")return S.ncrs.filter(r=>r.status!=="Closed").length;if(k==="defects")return S.defects.filter(r=>r.status!=="Closed").length;return ""}
 function renderNav(){const cur=S.view==="pack"?"packs":S.view;
   const b=NAV.map(([k,l])=>(k==="settings"?'<div class="sep"></div>':"")+'<button class="navb" data-act="nav" data-v="'+k+'"'+(cur===k?' aria-current="page"':"")+'><span>'+l+'</span><span class="ct">'+navCount(k)+'</span></button>').join("");
@@ -733,7 +733,7 @@ function render(){
   renderNav();
   const a=document.activeElement,aid=a&&a.id,sel=a&&a.selectionStart;
   const v=$("#view");
-  v.innerHTML=({dash:viewDash,itrs:viewItrs,welds:viewWelds,packs:viewPacks,pack:viewPack,drawings:viewDrawings,mivs:viewMivs,ncrs:viewNcrs,defects:viewDefects,settings:viewSettings}[S.view]||viewDash)();
+  v.innerHTML=({dash:viewDash,itrs:viewItrs,welds:viewWelds,packs:viewPacks,pack:viewPack,drawings:viewDrawings,mivs:viewMivs,ncrs:viewNcrs,defects:viewDefects,library:viewLibrary,settings:viewSettings}[S.view]||viewDash)();
   drawQRs(v);
   if(aid&&!$("#drawer").contains(a)){const n=document.getElementById(aid);if(n&&n!==a){n.focus();try{n.setSelectionRange(sel,sel)}catch(e){}}}
 }
@@ -1018,6 +1018,39 @@ function viewDrawings(){
     h+='<details class="agrp" data-grp="'+esc(k)+'"'+(open?" open":"")+'><summary><span class="an">'+esc(p.name)+'</span><span class="am">'+xs.length+' drawing'+(xs.length>1?"s":"")+(isos?' · '+isos+' iso'+(isos>1?"s":""):"")+' · updated '+last+'</span></summary><div class="docs dr-body">'+body+'</div></details>'});
   h+='<h2 class="sec" style="margin-top:26px">Link to this register</h2><div class="linkbox" style="max-width:640px"><input id="lk-drawings" readonly value="'+esc(link)+'" aria-label="Drawing register link"><button class="btn ghost sm" data-act="copy" data-v="lk-drawings">Copy</button></div><p class="hint">Anyone you share the app with can open this link. It always shows the latest drawings.</p>';
   return h}
+
+/* ---------- procedures & registers (project library) ---------- */
+const LIB_CATS=["Procedures & methodologies","TRAs & SWMS","QA plans","Registers","Other"];
+function viewLibrary(){
+  const L=(sett().library||[]).slice();
+  let h=head("Procedures & registers","Work procedures, methodologies, TRAs, the QA plan and the current site registers. PDFs open here; Excel and Word files download.","");
+  if(!S.loaded)return h+loadingOr("");
+  const q=(S.lq||"").trim().toLowerCase();
+  const xs=L.filter(f=>!q||[f.name,f.rev,f.cat,f.note].join(" ").toLowerCase().includes(q));
+  h+='<div class="tb" style="margin-bottom:16px"><div><div class="k">Documents</div><div class="v mono">'+L.length+'</div></div><div><div class="k">Procedures</div><div class="v mono">'+L.filter(f=>/Procedures|TRAs|QA plans/.test(f.cat)).length+'</div></div><div><div class="k">Registers</div><div class="v mono">'+L.filter(f=>f.cat==="Registers").length+'</div></div><div><div class="k">Last updated</div><div class="v mono">'+au(L.map(f=>f.at||"").sort().pop())+'</div></div></div>';
+  h+='<div class="toolbar">'+searchBoxId("lq","Search procedures and registers",S.lq||"")+'</div>';
+  if(!L.length)h+=emptyState("No documents yet",S.canEdit?"Add a procedure or register below.":"Procedures and registers appear here once they are added.");
+  else if(!xs.length)h+=emptyState("Nothing matches","Try part of the name, e.g. pressure or MIV.");
+  const ICO=f=>/\.xlsx?$/i.test(f.name)?"XLS":/\.docx?$/i.test(f.name)?"DOC":/\.csv$/i.test(f.name)?"CSV":/\.png|\.jpe?g/i.test(f.name)?"IMG":"PDF";
+  const order=LIB_CATS.concat([...new Set(xs.map(f=>f.cat))].filter(c=>!LIB_CATS.includes(c)));
+  order.forEach(c=>{const ys=xs.filter(f=>(f.cat||"Other")===c).sort((a,b)=>String(a.name).localeCompare(b.name));if(!ys.length)return;
+    h+='<h2 class="sec" style="margin-top:18px">'+esc(c)+' <span class="mono" style="font-weight:500;color:var(--ink-2);letter-spacing:0">'+ys.length+'</span></h2><div class="docs">'+ys.map(f=>{const u=fUrl(f);const pdf=ICO(f)==="PDF";
+      return '<div class="doc"><div class="ico">'+ICO(f)+'</div><div style="min-width:0"><a href="'+esc(u)+'"'+(pdf?' target="_blank" rel="noopener"':' download="'+esc(f.name)+'"')+'>'+esc(f.name.replace(/\.(pdf|xlsx?|docx?|csv)$/i,""))+'</a><div class="meta">'+esc([f.rev?"Rev "+f.rev:"",f.note||"",kb(f.size),f.at?"added "+au(f.at):""].filter(Boolean).join(" · "))+'</div></div><div class="acts"><a class="btn ghost sm" href="'+esc(u)+'"'+(pdf?' target="_blank" rel="noopener">Open':' download="'+esc(f.name)+'">Download')+'</a>'+(S.canEdit?'<button class="btn ghost sm" data-act="librm" data-v="'+esc(f.aid)+'">Remove</button>':"")+'</div></div>'}).join("")+'</div>'});
+  if(S.canEdit&&assets)h+='<h2 class="sec" style="margin-top:26px">Add a document</h2><div class="fg" style="max-width:720px"><div class="f wide"><label for="libfile">File <em>PDF, Excel, Word or CSV · up to 20 MB</em></label><input id="libfile" type="file" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.png,.jpg,.jpeg"></div><div class="f"><label for="libcat">Type</label><select id="libcat">'+LIB_CATS.map(c=>'<option>'+esc(c)+'</option>').join("")+'</select></div><div class="f"><label for="librev">Revision</label><input id="librev" placeholder="e.g. 0, A, 15"></div><div class="f wide"><label for="libnote">Note <em>optional</em></label><input id="libnote" placeholder="e.g. replaces Rev 14"></div></div><div class="upl"><button class="btn" data-act="libadd">'+icon("plus")+'Add document</button><span class="hint" style="margin:0">Adding a newer revision? Remove the old one after adding the new one.</span></div>';
+  return h}
+async function libAdd(){
+  const fi=$("#libfile");const f=fi&&fi.files&&fi.files[0];if(!f){toast("Choose a file first.",true);return}
+  if(f.size>20*1048576){toast("That file is over 20 MB.",true);return}
+  const type=f.type||(/\.pdf$/i.test(f.name)?"application/pdf":"application/octet-stream");
+  toast("Uploading "+f.name+"…");
+  try{const r=await assets.upload(f,{type});
+    const st=Object.assign({},S.settings||{});const lib=(st.library||[]).slice();
+    lib.push({aid:r.id,name:f.name,cat:$("#libcat").value,rev:$("#librev").value.trim(),note:$("#libnote").value.trim(),type,size:f.size,at:new Date().toISOString(),own:true});
+    st.library=lib;await putSettings(st);toast("Added "+f.name)}catch(e){toast(errMsg(e),true)}}
+async function libRemove(aid,btn){
+  if(btn.dataset.armed!=="1"){btn.dataset.armed="1";btn.textContent="Tap again to remove";btn.classList.add("danger","armed");setTimeout(()=>{if(btn.isConnected){btn.dataset.armed="";btn.textContent="Remove";btn.classList.remove("danger","armed")}},4000);return}
+  const st=Object.assign({},S.settings||{});const f=(st.library||[]).find(x=>x.aid===aid);st.library=(st.library||[]).filter(x=>x.aid!==aid);
+  try{await putSettings(st);if(f&&f.own&&assets){try{await assets.delete(aid)}catch(e){}}toast("Removed")}catch(e){toast(errMsg(e),true)}}
 function qrPanel(p){const L=packLink(p);
   return '<div class="qrpanel"><div class="qrw"><canvas class="qrc" data-text="'+esc(L)+'" role="img" aria-label="QR code for '+esc(p.name)+'"></canvas></div><div class="txt"><div><b>Scan to open this job pack.</b><div class="hint" style="margin-top:2px">Print the A4 sign and fix it at the work area. Anyone scanning needs access to this app through your Share menu and must be signed in to Claude.</div></div>'+
    '<div class="linkbox"><input id="lk-'+esc(p.slug)+'" readonly value="'+esc(L)+'" aria-label="Job pack link"><button class="btn ghost sm" data-act="copy" data-v="lk-'+esc(p.slug)+'">Copy</button></div>'+
@@ -1374,6 +1407,8 @@ document.addEventListener("click",async e=>{
   if(a==="attach"){const sel=$("#att-sel");const pk=packFor(S.draft.area);if(!sel||!pk)return;const f=(pk.docs||[]).find(x=>x.aid===sel.value);if(!f)return;
     const cat=/drawing|P&ID/i.test(f.cat)?"Drawings":f.cat==="ITPs"?"ITP":"Other";
     (S.draft.files||(S.draft.files=[])).push({aid:f.aid,st:f.st||"",name:f.name,cat,rev:f.rev||"",type:f.type,size:f.size,at:new Date().toISOString(),ref:true});drawDrawer();markDirty();return}
+  if(a==="libadd"){await libAdd();return}
+  if(a==="librm"){await libRemove(b.dataset.v,b);return}
   if(a==="lb"){openLb(S.draft.photos||[],+b.dataset.i,S.canWrite);return}
   if(a==="lbdoc"){const p=S.view==="pack"?S.packs.find(x=>x.slug===S.packSlug):null;let list=[];
     if(S.draft&&!$("#drawer").hidden)list=(S.draft.docs||S.draft.files||[]).filter(isImg);else if(p)list=(p.docs||[]).filter(isImg);
@@ -1412,6 +1447,7 @@ function onEdit(e){const el=e.target;
   if(el.id==="q"){S.q=el.value;render();return}
   if(el.id==="pq"){S.pq=el.value;render();return}
   if(el.id==="dq"){S.dq=el.value;render();return}
+  if(el.id==="lq"){S.lq=el.value;render();const n=$("#lq");if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}return}
   if(el.id==="darea"){S.darea=el.value;S.dcat="";render();return}
   if(el.id==="tplf"){S.fil.itrTpl=el.value;render();return}
   if(el.id==="up-cat"){S.upCat=el.value;return}
@@ -1454,7 +1490,7 @@ function openPicker(){S.dcol=null;S.draft=null;$("#scrim").hidden=false;const dr
 function closePicker(){if(!S.draft&&!$("#drawer").hidden){$("#drawer").hidden=true;$("#scrim").hidden=true}}
 
 /* ---------- routing + boot ---------- */
-const VIEWS=["dash","itrs","welds","packs","drawings","mivs","ncrs","defects"];
+const VIEWS=["dash","itrs","welds","packs","drawings","mivs","ncrs","defects","library"];
 function hashView(){const h=String(location.hash||"");const m=h.match(/^#pack-([a-z0-9-]+)$/);if(m){S.view="pack";S.packSlug=m[1];return true}
   const v=h.replace(/^#/,"");if(VIEWS.includes(v)){S.view=v;return true}return false}
 function route(){if(hashView()){if(S.draft)closeDrawer();render();window.scrollTo(0,0)}}

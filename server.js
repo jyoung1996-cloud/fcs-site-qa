@@ -70,7 +70,7 @@ async function putFile(aid, buf, type) {
   await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: "files/" + aid, Body: buf, ContentType: type || "application/octet-stream" }));
   await pool.query("INSERT INTO files (aid,size,type) VALUES ($1,$2,$3) ON CONFLICT (aid) DO UPDATE SET size=$2, type=$3", [aid, buf.length, type]);
 }
-const typeOf = n => /\.pdf$/i.test(n) ? "application/pdf" : /\.png$/i.test(n) ? "image/png" : /\.jpe?g$/i.test(n) ? "image/jpeg" : /\.webp$/i.test(n) ? "image/webp" : /\.csv$/i.test(n) ? "text/csv" : "application/octet-stream";
+const typeOf = n => /\.pdf$/i.test(n) ? "application/pdf" : /\.png$/i.test(n) ? "image/png" : /\.jpe?g$/i.test(n) ? "image/jpeg" : /\.webp$/i.test(n) ? "image/webp" : /\.csv$/i.test(n) ? "text/csv" : /\.xlsx$/i.test(n) ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : /\.docx$/i.test(n) ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : /\.xls$/i.test(n) ? "application/vnd.ms-excel" : /\.doc$/i.test(n) ? "application/msword" : "application/octet-stream";
 
 // Unpack a zip already in the bucket (key) into files/<aid>; entry names are "<aid>.<ext>". Deletes the zip afterwards.
 async function unpack(key) {
