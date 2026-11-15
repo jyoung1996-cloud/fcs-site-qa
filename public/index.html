@@ -299,6 +299,25 @@ details.grp:not(:last-child)>summary{border-bottom:1px solid var(--line)}
 table.reg tr.tgrp td{background:var(--label);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--ink-2);padding:5px 12px;cursor:default}
 table.reg tbody tr.tgrp:hover td{background:var(--label)}
 .agrp-tools{display:flex;justify-content:flex-end;gap:8px;margin:0 0 8px}
+/* Pressure testing sub-tabs and test pack rows */
+.ptabs{display:flex;gap:0;margin:-4px 0 16px;border-bottom:2px solid var(--ink);overflow-x:auto}
+.ptabs button{background:none;border:0;border-bottom:4px solid transparent;margin-bottom:-2px;padding:10px 16px;min-height:44px;font-weight:700;font-size:14px;color:var(--ink-2);white-space:nowrap;display:inline-flex;gap:8px;align-items:center}
+.ptabs button .mono{font-size:12px;font-weight:500}
+.ptabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--red)}
+.ptabs button:hover{color:var(--ink)}
+details.tpk>summary{display:grid;grid-template-columns:96px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;min-height:52px}
+details.tpk>summary::after{font-size:12.5px}
+details.tpk[open]>summary{background:var(--label)}
+.tpk .tpn{font-weight:700;font-size:14px;color:var(--ink)}
+.tpk .tpd{min-width:0}.tpk .tpd b{display:block;font-size:14px;overflow-wrap:anywhere}
+.tpk .tpd .s{display:block;font-size:12.5px;color:var(--ink-2);overflow-wrap:anywhere}
+.tpk .tpp{font-size:12.5px;white-space:nowrap;color:var(--ink-2)}
+.tp-body{border-bottom:1px solid var(--line);border-left:4px solid var(--red)}
+.tp-meta{padding:8px 12px;font-size:13px;display:grid;gap:3px;border-bottom:1px solid var(--line-2)}
+.tp-meta .k{display:inline-block;min-width:72px;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--ink-2);margin-right:6px}
+.nolink{font-weight:600;color:var(--ink-2)}
+.attn-body{border:0}
+@media (max-width:620px){details.tpk>summary{grid-template-columns:minmax(0,1fr) auto}.tpk .tpn{grid-column:1/-1}.tpk .tpp{display:none}}
 .doc{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line-2)}
 .doc:last-child{border-bottom:0}
 .doc .ico{width:48px;height:48px;display:grid;place-items:center;background:var(--label);font-family:var(--f-mono);font-size:11px;font-weight:600;overflow:hidden;color:var(--ink-2)}
@@ -717,10 +736,10 @@ function refCount(aid,skipCol,skipId){let n=0;["itrs","packs"].forEach(c=>S[c].f
 async function dropAsset(aid,col,id,st){if(!assets||!aid||st)return;if(refCount(aid,col,id))return;try{await assets.delete(aid)}catch(e){}}
 
 /* ---------- nav ---------- */
-const NAV=[["dash","Dashboard"],["itrs","ITRs"],["welds","EF weld log"],["packs","Job packs"],["drawings","Drawing register"],["mivs","MIV register"],["ncrs","NCRs"],["defects","Defects"],["library","Procedures & registers"],["settings","Project setup"]];
-function navCount(k){if(k==="library")return (sett().library||[]).length;if(k==="itrs")return S.itrs.length;if(k==="welds")return S.itrs.filter(r=>r.tpl==="M1.T092").length;if(k==="mivs")return S.mivs.length;if(k==="packs")return S.packs.length;if(k==="drawings")return S.packs.reduce((t,p)=>t+(p.docs||[]).length,0);
+const NAV=[["dash","Dashboard"],["attn","Needs attention"],["itrs","ITRs"],["pressure","Pressure testing"],["packs","Job packs"],["drawings","Drawing register"],["mivs","MIV register"],["ncrs","NCRs"],["defects","Defects"],["library","Procedures & registers"],["settings","Project setup"]];
+function navCount(k){if(k==="pressure")return tpItems().length||"";if(k==="attn")return S.loaded?attnItems(S.itrs.map(r=>({r,x:itrState(r)}))).length:"";if(k==="library")return (sett().library||[]).length;if(k==="itrs")return S.itrs.length;if(k==="welds")return S.itrs.filter(r=>r.tpl==="M1.T092").length;if(k==="mivs")return S.mivs.length;if(k==="packs")return S.packs.length;if(k==="drawings")return S.packs.reduce((t,p)=>t+(p.docs||[]).length,0);
   if(k==="ncrs")return S.ncrs.filter(r=>r.status!=="Closed").length;if(k==="defects")return S.defects.filter(r=>r.status!=="Closed").length;return ""}
-function renderNav(){const cur=S.view==="pack"?"packs":S.view;
+function renderNav(){const cur=S.view==="pack"?"packs":PT_VIEWS.includes(S.view)?"pressure":S.view;
   const b=NAV.map(([k,l])=>(k==="settings"?'<div class="sep"></div>':"")+'<button class="navb" data-act="nav" data-v="'+k+'"'+(cur===k?' aria-current="page"':"")+'><span>'+l+'</span><span class="ct">'+navCount(k)+'</span></button>').join("");
   $("#rail").innerHTML=b;$("#tabs").innerHTML=b.replace('<div class="sep"></div>',"")}
 
@@ -733,7 +752,7 @@ function render(){
   renderNav();
   const a=document.activeElement,aid=a&&a.id,sel=a&&a.selectionStart;
   const v=$("#view");
-  v.innerHTML=({dash:viewDash,itrs:viewItrs,welds:viewWelds,packs:viewPacks,pack:viewPack,drawings:viewDrawings,mivs:viewMivs,ncrs:viewNcrs,defects:viewDefects,library:viewLibrary,settings:viewSettings}[S.view]||viewDash)();
+  v.innerHTML=({dash:viewDash,itrs:viewItrs,welds:viewWelds,pressure:viewPressure,ptpid:viewPtPids,attn:viewAttn,packs:viewPacks,pack:viewPack,drawings:viewDrawings,mivs:viewMivs,ncrs:viewNcrs,defects:viewDefects,library:viewLibrary,settings:viewSettings}[S.view]||viewDash)();
   drawQRs(v);
   if(aid&&!$("#drawer").contains(a)){const n=document.getElementById(aid);if(n&&n!==a){n.focus();try{n.setSelectionRange(sel,sel)}catch(e){}}}
 }
@@ -764,8 +783,7 @@ function viewDash(){
   if(!S.loaded)return h+emptyState("Loading records…","Your registers appear here as soon as they load.");
   h+='<div class="cols"><div>';
   h+='<h2 class="sec">ITR progress by area</h2>'+areaBars(itr);
-  h+='<h2 class="sec" style="margin-top:26px">Recent activity</h2>'+recent();
-  h+='</div><div><h2 class="sec">Needs attention</h2>'+attention(itr)+'</div></div>';
+  h+='</div><div><h2 class="sec">Recent activity</h2>'+recent()+'</div></div>';
   return h}
 function tile(view,n,cap,sm,alert,stf){return '<button class="tile'+(alert?" alert":"")+'" data-act="goto" data-v="'+view+'" data-f="'+esc(stf||"")+'"><span class="big">'+n+'</span><span class="cap">'+esc(stf?stf+" "+cap:cap)+'</span><span class="sm">'+esc(sm)+'</span></button>'}
 function areaBars(itr){
@@ -777,17 +795,28 @@ function areaBars(itr){
   rows.forEach(({a,xs})=>{const c=k=>xs.filter(o=>o.x.s===k).length;const w=n=>(n/max*100).toFixed(2)+"%";const cl=c("Closed"),fc=c("FCS complete");
     h+='<div class="bar-row"><span class="an">'+esc(a)+'</span><div class="bar" role="img" aria-label="'+esc(a)+': '+c("Open")+' open, '+c("In progress")+' in progress, '+fc+' FCS complete, '+cl+' closed"><i class="c-closed" style="width:'+w(cl)+'"></i><i class="c-fcs" style="width:'+w(fc)+'"></i><i class="c-prog" style="width:'+w(c("In progress"))+'"></i><i class="c-open" style="width:'+w(c("Open"))+'"></i></div><span class="ac">'+(cl+fc)+'/'+xs.length+'</span></div>'});
   h+='<div class="legend"><span><i class="c-closed"></i>Closed</span><span><i class="c-fcs"></i>FCS complete</span><span><i class="c-prog"></i>In progress</span><span><i class="c-open"></i>Open</span><span class="mono">count = FCS complete + closed / total</span></div></div>';return h}
-function attention(itr){
+function attnItems(itr){
   const L=[];
-  itr.filter(o=>o.x.fail&&o.x.s!=="Closed").forEach(o=>L.push({f:"FAIL",c:"red",t:o.r.no+" has a failed check",s:(o.r.title||"")+" · raise or link an NCR",col:"itrs",id:o.r.id}));
-  S.ncrs.filter(overdue).forEach(r=>L.push({f:"OVERDUE",c:"red",t:r.no+" "+(r.title||""),s:"NCR due "+au(r.due),col:"ncrs",id:r.id}));
-  S.defects.filter(overdue).forEach(r=>L.push({f:"OVERDUE",c:"red",t:r.no+" "+(r.desc||""),s:(r.location||"")+" · due "+au(r.due),col:"defects",id:r.id}));
-  itr.filter(o=>o.x.s==="In progress"&&o.x.holds).forEach(o=>L.push({f:o.x.holds+" HOLD",c:"amb",t:o.r.no+" "+(o.r.title||""),s:"Hold point"+(o.x.holds>1?"s":"")+" not released · "+(o.r.area||""),col:"itrs",id:o.r.id}));
-  S.mivs.filter(r=>!r.result||r.result==="Pending").forEach(r=>L.push({f:"MIV",c:"amb",t:r.no+" "+(r.supplier||"")+" delivery",s:"Received "+au(r.date)+" · inspection pending",col:"mivs",id:r.id}));
-  S.mivs.filter(r=>r.result&&r.result!=="Pending"&&!S.itrs.some(i=>i.tpl==="S1.T016"&&i.data&&i.data.miv===r.no)).forEach(r=>L.push({f:"S1.T016",c:"blu",t:r.no+" has no delivery ITR",s:"One S1.T016 ITR per MIV",col:"mivs",id:r.id}));
-  sett().welders.forEach(w=>{const st=certState(w);if(st&&st!=="ok")L.push({f:"CERT",c:st==="expired"?"red":"amb",t:w.name+" welding certificate "+(st==="expired"?"has expired":"expires soon"),s:"Expiry "+au(w.expiry)+" · Project setup",col:"",id:""})});
-  if(!L.length)return emptyState("Nothing needs attention","No failed checks, overdue items, open hold points or pending deliveries.");
-  return '<div class="alist">'+L.slice(0,12).map(o=>'<button class="aitem" '+(o.col?'data-act="open" data-c="'+o.col+'" data-id="'+o.id+'"':'data-act="nav" data-v="settings"')+'><span class="flag '+o.c+'">'+esc(o.f)+'</span><span><span class="t">'+esc(o.t)+'</span><br><span class="s">'+esc(o.s)+'</span></span></button>').join("")+'</div>'}
+  itr.filter(o=>o.x.fail&&o.x.s!=="Closed").forEach(o=>L.push({g:"Failed checks",f:"FAIL",c:"red",t:o.r.no+" has a failed check",s:(o.r.title||"")+" · raise or link an NCR",col:"itrs",id:o.r.id}));
+  S.ncrs.filter(overdue).forEach(r=>L.push({g:"Overdue",f:"OVERDUE",c:"red",t:r.no+" "+(r.title||""),s:"NCR due "+au(r.due),col:"ncrs",id:r.id}));
+  S.defects.filter(overdue).forEach(r=>L.push({g:"Overdue",f:"OVERDUE",c:"red",t:r.no+" "+(r.desc||""),s:(r.location||"")+" · due "+au(r.due),col:"defects",id:r.id}));
+  itr.filter(o=>o.x.s==="In progress"&&o.x.holds).forEach(o=>L.push({g:"Hold points",f:o.x.holds+" HOLD",c:"amb",t:o.r.no+" "+(o.r.title||""),s:"Hold point"+(o.x.holds>1?"s":"")+" not released · "+(o.r.area||""),col:"itrs",id:o.r.id}));
+  S.mivs.filter(r=>!r.result||r.result==="Pending").forEach(r=>L.push({g:"Deliveries awaiting inspection",f:"MIV",c:"amb",t:r.no+" "+(r.supplier||"")+" delivery",s:"Received "+au(r.date)+" · inspection pending",col:"mivs",id:r.id}));
+  S.mivs.filter(r=>r.result&&r.result!=="Pending"&&!S.itrs.some(i=>i.tpl==="S1.T016"&&i.data&&i.data.miv===r.no)).forEach(r=>L.push({g:"Deliveries without an S1.T016 ITR",f:"S1.T016",c:"blu",t:r.no+" has no delivery ITR",s:"One S1.T016 ITR per MIV",col:"mivs",id:r.id}));
+  sett().welders.forEach(w=>{const st=certState(w);if(st&&st!=="ok")L.push({g:"Welder certificates",f:"CERT",c:st==="expired"?"red":"amb",t:w.name+" welding certificate "+(st==="expired"?"has expired":"expires soon"),s:"Expiry "+au(w.expiry)+" · Project setup",col:"",id:""})});
+  return L}
+const attnBtn=o=>'<button class="aitem" '+(o.col?'data-act="open" data-c="'+o.col+'" data-id="'+o.id+'"':'data-act="nav" data-v="settings"')+'><span class="flag '+o.c+'">'+esc(o.f)+'</span><span><span class="t">'+esc(o.t)+'</span><br><span class="s">'+esc(o.s)+'</span></span></button>';
+function viewAttn(){
+  let h=head("Needs attention","Failed checks, overdue NCRs and defects, unreleased hold points, deliveries waiting on inspection and welder certificates. Tap an item to open it.","");
+  if(!S.loaded)return h+loadingOr("");
+  const L=attnItems(S.itrs.map(r=>({r,x:itrState(r)})));
+  if(!L.length)return h+emptyState("Nothing needs attention","No failed checks, overdue items, open hold points or pending deliveries.");
+  const gs=[...new Set(L.map(o=>o.g))];
+  h+='<div class="tb" style="margin-bottom:16px">'+gs.map(g=>'<div><div class="k">'+esc(g)+'</div><div class="v mono">'+L.filter(o=>o.g===g).length+'</div></div>').join("")+'</div>';
+  if(gs.length>1)h+='<div class="agrp-tools"><button class="btn ghost" data-act="agrpall" data-v="attn" data-o="1">Show all</button><button class="btn ghost" data-act="agrpall" data-v="attn" data-o="">Hide all</button></div>';
+  gs.forEach(g=>{const xs=L.filter(o=>o.g===g);const k="attn|area|"+g;const open=S.openGrp[k]!==false;
+    h+='<details class="agrp" data-grp="'+esc(k)+'"'+(open?" open":"")+'><summary><span class="an">'+esc(g)+'</span><span class="am">'+xs.length+' item'+(xs.length>1?"s":"")+'</span></summary><div class="alist attn-body">'+xs.map(attnBtn).join("")+'</div></details>'});
+  return h}
 function recent(){
   const all=[];REC.forEach(c=>S[c].forEach(r=>all.push({c,r})));
   all.sort((a,b)=>String(b.r.updatedAt||"").localeCompare(String(a.r.updatedAt||"")));
@@ -869,7 +898,7 @@ async function zipRecords(kind){
   finally{S.zipping=false;zipBar("")}}
 function viewWelds(){
   const st=sett();const W=S.itrs.filter(r=>r.tpl==="M1.T092");
-  let h=head("EF weld log","Field electrofusion joints, one M1.T092 ITR per weld. Welder accreditation fills in from Project setup.",zipBtn("welds")+csvBtn("welds")+(S.canWrite?'<button class="btn" data-act="newtpl" data-v="M1.T092">'+icon("plus")+'New EF weld ITR</button>':""));
+  let h=ptHead("welds","EF weld log: field electrofusion joints, one M1.T092 ITR per weld. Welder accreditation fills in from Project setup.",zipBtn("welds")+csvBtn("welds")+(S.canWrite?'<button class="btn" data-act="newtpl" data-v="M1.T092">'+icon("plus")+'New EF weld ITR</button>':""));
   h+='<div class="toolbar">'+searchBox("Search weld no., iso, welder…")+'</div>';
   const wn=[...new Set(st.welders.map(w=>w.name).concat(W.map(r=>(r.data||{}).welder).filter(Boolean)))].filter(n=>W.some(r=>(r.data||{}).welder===n)||st.welders.some(w=>w.name===n));
   const wc={"":W.length};wn.forEach(n=>wc[n]=W.filter(r=>r.data&&r.data.welder===n).length);
@@ -1017,6 +1046,73 @@ function viewDrawings(){
         return '<div class="doc"><div class="ico">'+esc(ICO[f.cat]||"PDF")+'</div><div style="min-width:0"><a href="'+esc(u)+'" target="_blank" rel="noopener">'+esc(f.name)+'</a><div class="meta">'+esc([f.rev?"Rev "+f.rev:"",f.welds?"Welds "+f.welds:"",f.src?f.src.replace(/^CS1135-WT-BES-OWM-CO-WPK-00-/,"WPK "):"",kb(f.size)].filter(Boolean).join(" · "))+'</div></div><div class="acts"><a class="btn ghost sm" href="'+esc(u)+'" target="_blank" rel="noopener">Open</a></div></div>'}).join("")});
     h+='<details class="agrp" data-grp="'+esc(k)+'"'+(open?" open":"")+'><summary><span class="an">'+esc(p.name)+'</span><span class="am">'+xs.length+' drawing'+(xs.length>1?"s":"")+(isos?' · '+isos+' iso'+(isos>1?"s":""):"")+' · updated '+last+'</span></summary><div class="docs dr-body">'+body+'</div></details>'});
   h+='<h2 class="sec" style="margin-top:26px">Link to this register</h2><div class="linkbox" style="max-width:640px"><input id="lk-drawings" readonly value="'+esc(link)+'" aria-label="Drawing register link"><button class="btn ghost sm" data-act="copy" data-v="lk-drawings">Copy</button></div><p class="hint">Anyone you share the app with can open this link. It always shows the latest drawings.</p>';
+  return h}
+
+/* ---------- pressure testing: test packs, marked-up P&IDs, EF weld log ---------- */
+const PT_VIEWS=["pressure","ptpid","welds"];
+const PT_AREAS={CF:"CF Area",CIP:"CIP areas (MF & RO)",MF:"MF Area",TR:"MF Trench Area",R1:"RO Pass 1",R2:"RO Pass 2"};
+const PT_MARK=["Pressure test mark-ups","Flange tag mark-ups"];
+const PT_PID_CATS=["Pressure test mark-ups","Flange tag mark-ups","P&ID weld mark-ups"];
+function tpData(){return sett().testpacks||{}}
+function tpItems(){return (tpData().items||[]).slice()}
+function ptMarkDocs(cats){const out=[];S.packs.slice().sort((a,b)=>String(a.name).localeCompare(b.name)).forEach(p=>(p.docs||[]).forEach(f=>{if((cats||PT_MARK).includes(f.cat))out.push({f,p})}));return out}
+/* does a document name cover this test pack? Handles "TP-SW-PE1-2307 to 2312", "TP-SW-2307-2312" and "TP-FIL-4131" */
+function tpCovers(name,tp){const m=String(tp||"").match(/^TP-([A-Z]+)-PE1-(\d{4})/);if(!m)return false;const n=+m[2];
+  const re=new RegExp("TP-"+m[1]+"-(?:PE1-)?(\\d{4})(?:\\s*(?:to|-)\\s*(\\d{4}))?(?!\\d)","g");let x;
+  while((x=re.exec(String(name||"")))){const a=+x[1],b=x[2]?+x[2]:a;if(n>=Math.min(a,b)&&n<=Math.max(a,b))return true}return false}
+const inCloud=f=>!!f&&!!f.aid&&(!window.__CLOUD_FILES||!f.st&&window.__CLOUD_FILES.has(f.aid)||!!f.st);
+function ptTabs(cur){const t=[["pressure","Test packs",tpItems().length],["ptpid","Marked-up P&IDs",ptMarkDocs(PT_PID_CATS).length],["welds","EF weld log",S.itrs.filter(r=>r.tpl==="M1.T092").length]];
+  return '<div class="ptabs" role="tablist" aria-label="Pressure testing">'+t.map(([v,l,n])=>'<button role="tab" data-act="nav" data-v="'+v+'" aria-selected="'+(cur===v)+'">'+esc(l)+' <span class="mono">'+n+'</span></button>').join("")+'</div>'}
+function ptHead(cur,sub,actions){return head("Pressure testing",sub,actions)+ptTabs(cur)}
+function tpDocRow(f,label,ico,meta){if(!f||!f.aid)return "";const ok=inCloud(f);const u=fUrl(f);
+  return '<div class="doc"><div class="ico">'+esc(ico)+'</div><div style="min-width:0">'+(ok?'<a href="'+esc(u)+'" target="_blank" rel="noopener">'+esc(label)+'</a>':'<span class="nolink">'+esc(label)+'</span>')+'<div class="meta">'+esc([meta||"",kb(f.size),ok?"":"not uploaded to the cloud yet"].filter(Boolean).join(" · "))+'</div></div><div class="acts">'+(ok?'<a class="btn ghost sm" href="'+esc(u)+'" target="_blank" rel="noopener">Open</a>':"")+'</div></div>'}
+function viewPressure(){
+  const D=tpData();const items=tpItems();
+  let h=ptHead("pressure","Hydrostatic test packs by area. Each pack has its print pack (summary, test pack sheet, marked-up P&IDs, flange tags, isos and weld map), the test pack sheet on its own, and the P&ID and flange tag mark-ups.","");
+  if(!S.loaded)return h+loadingOr("");
+  if(!items.length)return h+emptyState("No test packs yet","Test packs appear here once they are loaded from the QA folder.");
+  const marks=ptMarkDocs();
+  const q=(S.tq||"").trim().toLowerCase();
+  const rows=items.map(t=>{const ms=marks.filter(o=>tpCovers(o.f.name,t.tp));return {t,pid:ms.filter(o=>o.f.cat==="Pressure test mark-ups"),tag:ms.filter(o=>o.f.cat==="Flange tag mark-ups")}});
+  const L=rows.filter(({t,pid,tag})=>!q||[t.pt,t.tp,t.desc,t.lines,t.pids,PT_AREAS[t.area]].concat(pid.concat(tag).map(o=>o.f.name)).join(" ").toLowerCase().replace(/[\s-]+/g,"").includes(q.replace(/[\s-]+/g,"")));
+  const online=items.filter(t=>inCloud(t.pack)).length;
+  h+='<div class="tb" style="margin-bottom:16px"><div><div class="k">Test packs</div><div class="v mono">'+items.length+'</div></div><div><div class="k">Print packs online</div><div class="v mono">'+online+' of '+items.length+'</div></div><div><div class="k">P&amp;ID mark-ups</div><div class="v mono">'+marks.filter(o=>o.f.cat==="Pressure test mark-ups").length+'</div></div><div><div class="k">Packs dated</div><div class="v mono">'+esc(D.dated||"—")+'</div></div></div>';
+  h+='<div class="toolbar">'+searchBoxId("tq","Search PT no., TP no., line no. or P&ID",S.tq||"")+(D.all&&inCloud(D.all)?'<a class="btn ghost" href="'+esc(fUrl(D.all))+'" target="_blank" rel="noopener">'+icon("dl")+'All test pack sheets (one PDF)</a>':"")+'</div>';
+  if(!L.length)return h+emptyState("No test packs match","Try the PT number, e.g. CIP-10, a line number, e.g. 5262, or a P&ID sheet, e.g. 16411-113.");
+  const areas=Object.keys(PT_AREAS).filter(a=>L.some(o=>o.t.area===a)).concat([...new Set(L.map(o=>o.t.area))].filter(a=>!PT_AREAS[a]));
+  const filt=!!q;
+  if(areas.length>1)h+='<div class="agrp-tools"><button class="btn ghost" data-act="agrpall" data-v="pt" data-o="1">Show all areas</button><button class="btn ghost" data-act="agrpall" data-v="pt" data-o="">Hide all areas</button></div>';
+  areas.forEach(a=>{const xs=L.filter(o=>o.t.area===a);const k="pt|area|"+a;const open=filt||areas.length===1||S.openGrp[k];
+    const body=xs.map(({t,pid,tag})=>{const kk="pt|pack|"+t.pt;const o2=filt&&xs.length<=3||S.openGrp[kk];
+      const pres=t.test?t.test+" bar.g":"";
+      let b='<div class="tp-meta">'+[t.lines?'<div><span class="k">Lines</span>'+esc(t.lines)+'</div>':"",t.pids?'<div><span class="k">P&amp;IDs</span>'+esc(t.pids)+'</div>':"",t.test?'<div><span class="k">Pressure</span>Operating '+esc(t.op||"—")+' bar.g · test '+esc(t.test)+' bar.g'+(t.kpa?' ('+esc(t.kpa)+' kPa)':"")+(t.hold?' · hold '+esc(t.hold)+' min':"")+'</div>':"",t.rev?'<div><span class="k">Pack</span>'+esc(t.rev)+'</div>':""].join("")+'</div>';
+      b+=tpDocRow(t.pack,t.pt+" print pack","PACK","Full pack to print and take to the test");
+      b+=tpDocRow(t.sheet,t.pt+" test pack sheet","SHEET","Cover sheet only");
+      if(pid.length)b+='<div class="cat-h">Marked-up P&amp;IDs · '+pid.length+'</div>'+pid.map(({f})=>tpDocRow(f,f.name.replace(/^Pressure test mark-up · /,""),"TEST",f.rev?"Rev "+f.rev:"")).join("");
+      if(tag.length)b+='<div class="cat-h">Flange tag mark-ups · '+tag.length+'</div>'+tag.map(({f})=>tpDocRow(f,f.name.replace(/^Flange tag mark-up · /,""),"TAG","")).join("");
+      if(!pid.length&&!tag.length)b+='<p class="hint" style="margin:8px 12px">The P&amp;ID and flange tag mark-ups for this test are inside the print pack.</p>';
+      return '<details class="grp tpk" data-grp="'+esc(kk)+'"'+(o2?" open":"")+'><summary><span class="tpn mono">'+esc(t.pt)+'</span><span class="tpd"><b>'+esc(t.tp)+'</b><span class="s">'+esc(t.desc||"")+'</span></span><span class="tpp mono">'+esc(pres)+'</span></summary><div class="tp-body">'+b+'</div></details>'}).join("");
+    h+='<details class="agrp" data-grp="'+esc(k)+'"'+(open?" open":"")+'><summary><span class="an">'+esc(PT_AREAS[a]||a)+'</span><span class="am">'+xs.length+' test pack'+(xs.length>1?"s":"")+'</span></summary><div class="docs dr-body">'+body+'</div></details>'});
+  h+='<p class="hint">Print packs and sheets as at '+esc(D.dated||"the last sync")+'. The signed test certificate is the record once the test is done; check the revision before you test.</p>';
+  return h}
+function viewPtPids(){
+  let h=ptHead("ptpid","Marked-up P&IDs for pressure testing, flange tag mark-ups and P&ID weld mark-ups, by job pack area.","");
+  if(!S.loaded)return h+loadingOr("");
+  const all=ptMarkDocs(PT_PID_CATS);
+  if(!all.length)return h+emptyState("No mark-ups yet","Marked-up P&IDs appear here once they are added to a job pack.");
+  const q=(S.mq||"").trim();const cat=S.ptcat||"";
+  const L=all.filter(o=>(!cat||o.f.cat===cat)&&(!q||docHit(o.f,q)||String(o.p.name).toLowerCase().includes(q.toLowerCase())));
+  h+='<div class="toolbar">'+searchBoxId("mq","Search TP no., P&ID sheet or line no.",S.mq||"")+'</div>';
+  const cc={"":all.length};PT_PID_CATS.forEach(c=>cc[c]=all.filter(o=>o.f.cat===c).length);
+  h+='<div class="chips">'+[["","All"]].concat(PT_PID_CATS.filter(c=>cc[c]).map(c=>[c,c])).map(([v,l])=>'<button class="chip" data-act="ptcat" data-v="'+esc(v)+'" aria-pressed="'+(cat===v)+'">'+esc(l)+' <span class="mono">'+cc[v]+'</span></button>').join("")+'</div>';
+  if(!L.length)return h+emptyState("Nothing matches","Try part of the TP number, e.g. 5262, or a P&ID sheet, e.g. 16411-120.");
+  const ar=sett().areas;const pk=[...new Set(L.map(o=>o.p))].sort((a,b)=>{const ia=ar.indexOf(a.area),ib=ar.indexOf(b.area);return (ia<0?99:ia)-(ib<0?99:ib)||String(a.name).localeCompare(b.name)});
+  const ICO={"Pressure test mark-ups":"TEST","Flange tag mark-ups":"TAG","P&ID weld mark-ups":"WELD"};const filt=!!(q||cat);
+  if(pk.length>1)h+='<div class="agrp-tools"><button class="btn ghost" data-act="agrpall" data-v="ptm" data-o="1">Show all areas</button><button class="btn ghost" data-act="agrpall" data-v="ptm" data-o="">Hide all areas</button></div>';
+  pk.forEach(p=>{const xs=L.filter(o=>o.p===p);const k="ptm|area|"+p.id;const open=filt||pk.length===1||S.openGrp[k];let body="";
+    PT_PID_CATS.forEach(c=>{const ys=xs.filter(o=>o.f.cat===c).sort((a,b)=>String(a.f.name).localeCompare(b.f.name));if(!ys.length)return;
+      body+='<div class="cat-h">'+esc(c)+' · '+ys.length+'</div>'+ys.map(({f})=>tpDocRow(f,f.name,ICO[c]||"PDF",f.rev?"Rev "+f.rev:"")).join("")});
+    h+='<details class="agrp" data-grp="'+esc(k)+'"'+(open?" open":"")+'><summary><span class="an">'+esc(p.name)+'</span><span class="am">'+xs.length+' mark-up'+(xs.length>1?"s":"")+'</span></summary><div class="docs dr-body">'+body+'</div></details>'});
   return h}
 
 /* ---------- procedures & registers (project library) ---------- */
@@ -1390,6 +1486,7 @@ document.addEventListener("click",async e=>{
   if(a==="jump"){const t=document.getElementById(b.dataset.v);if(t)t.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});return}
   if(a==="fil"){S.fil[b.dataset.k]=b.dataset.v;render();return}
   if(a==="dcat"){S.dcat=b.dataset.v;render();return}
+  if(a==="ptcat"){S.ptcat=b.dataset.v;render();return}
   if(a==="new"){const c=b.dataset.v;if(c==="itrs"){openPicker();return}openDrawer(c,blank(c));return}
   if(a==="newpack"){openDrawer("packs",blank("packs"));return}
   if(a==="newtpl"){openDrawer("itrs",blankItr(b.dataset.v));return}
@@ -1447,6 +1544,7 @@ function onEdit(e){const el=e.target;
   if(el.id==="q"){S.q=el.value;render();return}
   if(el.id==="pq"){S.pq=el.value;render();return}
   if(el.id==="dq"){S.dq=el.value;render();return}
+  if(el.id==="tq"||el.id==="mq"){S[el.id]=el.value;render();const n=$("#"+el.id);if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}return}
   if(el.id==="lq"){S.lq=el.value;render();const n=$("#lq");if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}return}
   if(el.id==="darea"){S.darea=el.value;S.dcat="";render();return}
   if(el.id==="tplf"){S.fil.itrTpl=el.value;render();return}
@@ -1490,7 +1588,7 @@ function openPicker(){S.dcol=null;S.draft=null;$("#scrim").hidden=false;const dr
 function closePicker(){if(!S.draft&&!$("#drawer").hidden){$("#drawer").hidden=true;$("#scrim").hidden=true}}
 
 /* ---------- routing + boot ---------- */
-const VIEWS=["dash","itrs","welds","packs","drawings","mivs","ncrs","defects","library"];
+const VIEWS=["dash","attn","itrs","welds","pressure","ptpid","packs","drawings","mivs","ncrs","defects","library"];
 function hashView(){const h=String(location.hash||"");const m=h.match(/^#pack-([a-z0-9-]+)$/);if(m){S.view="pack";S.packSlug=m[1];return true}
   const v=h.replace(/^#/,"");if(VIEWS.includes(v)){S.view=v;return true}return false}
 function route(){if(hashView()){if(S.draft)closeDrawer();render();window.scrollTo(0,0)}}
