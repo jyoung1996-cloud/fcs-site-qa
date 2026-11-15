@@ -133,6 +133,24 @@ async function handle(req, res) {
       return send(res, 200, { docs: r.rows, files: await usedBytes() });
     }
     if (p === "/admin/files") { const r = await pool.query("SELECT aid,size FROM files ORDER BY aid"); return send(res, 200, r.rows); }
+    // read/write records for scheduled syncs (admin token only)
+    let am = p.match(/^\/admin\/docs\/([a-z]+)$/);
+    if (am && req.method === "GET") {
+      if (!COLS.has(am[1])) return send(res, 400, { error: "bad collection" });
+      const r = await pool.query("SELECT id,data,updated_at FROM docs WHERE col=$1 AND NOT deleted ORDER BY id", [am[1]]);
+      return send(res, 200, r.rows.map(x => ({ id: x.id, data: x.data, updatedAt: x.updated_at })));
+    }
+    am = p.match(/^\/admin\/doc\/([a-z]+)\/([^/]+)$/);
+    if (am) {
+      const col = am[1], id = decodeURIComponent(am[2]);
+      if (!COLS.has(col) || !okId(id)) return send(res, 400, { error: "bad path" });
+      if (req.method === "GET") { const r = await pool.query("SELECT data,updated_at FROM docs WHERE col=$1 AND id=$2 AND NOT deleted", [col, id]); return r.rows.length ? send(res, 200, { id, data: r.rows[0].data, updatedAt: r.rows[0].updated_at }) : send(res, 404, { error: "not found" }); }
+      if (req.method === "PUT") {
+        const data = JSON.parse((await readBody(req, 4 * 1024 * 1024)).toString("utf8"));
+        await pool.query("INSERT INTO docs (col,id,data,deleted,seq,updated_at) VALUES ($1,$2,$3,false,nextval('doc_seq'),now()) ON CONFLICT (col,id) DO UPDATE SET data=$3, deleted=false, seq=nextval('doc_seq'), updated_at=now()", [col, id, data]);
+        return send(res, 200, { ok: true });
+      }
+    }
     return send(res, 404, { error: "not found" });
   }
 
