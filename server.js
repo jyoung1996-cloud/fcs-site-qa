@@ -23,6 +23,8 @@ const mkS3 = (key, secret, endpoint, region) => new S3Client({
 });
 let s3 = mkS3(process.env.S3_KEY, process.env.S3_SECRET);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: /sslmode=disable/.test(process.env.DATABASE_URL || "") ? false : { rejectUnauthorized: false }, max: 5 });
+// A dropped idle connection must not crash the server; the pool reconnects on the next query.
+pool.on("error", e => console.error("db pool error:", e.message));
 
 const APP_HTML = fs.readFileSync(path.join(__dirname, "public", "index.html"));
 const LOGIN_HTML = fs.readFileSync(path.join(__dirname, "public", "login.html"), "utf8");
@@ -44,7 +46,15 @@ async function migrate() {
     console.log("storage from config:", c.name || c.bucket);
   }
 }
-const ready = migrate().catch(e => console.error("migrate failed", e));
+// Keep trying until the database answers: never start serving on the environment's fallback bucket,
+// because files saved since the bucket move only exist in the bucket named in the config table.
+let isReady = false;
+const ready = (async () => {
+  for (let i = 0; ; i++) {
+    try { await migrate(); isReady = true; return; }
+    catch (e) { console.error("migrate failed (attempt " + (i + 1) + "), retrying:", e.message); await new Promise(r => setTimeout(r, Math.min(15000, 1000 * (i + 1)))); }
+  }
+})();
 
 // ---- auth ----
 const sign = v => crypto.createHmac("sha256", SECRET).update(v).digest("hex");
@@ -114,7 +124,10 @@ async function unpack(key) {
 
 // ---- routes ----
 async function handle(req, res) {
-  await ready;
+  if (!isReady) {
+    const ok = await Promise.race([ready.then(() => true), new Promise(r => setTimeout(() => r(false), 20000))]);
+    if (!ok) { res.writeHead(503, { "Content-Type": "text/plain", "Retry-After": "10" }); return res.end("Starting up - try again in a moment."); }
+  }
   const u = new URL(req.url, "http://x"); const p = u.pathname;
 
   if (p === "/healthz") return send(res, 200, { ok: true });
